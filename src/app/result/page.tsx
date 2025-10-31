@@ -2,92 +2,22 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-
-const hobbyDatabase = {
-  active: {
-    name: "ランニング・ジョギング",
-    emoji: "🏃",
-    description:
-      "身体を動かしてリフレッシュ。自分のペースで始められる手軽なスポーツ",
-    difficulty: "★☆☆☆☆",
-    cost: "★☆☆☆☆",
-    highlights: ["健康増進", "達成感", "一人でも楽しめる"],
-  },
-  indoor: {
-    name: "読書",
-    emoji: "📚",
-    description: "様々な世界を体験できる、知的好奇心を満たす趣味",
-    difficulty: "★☆☆☆☆",
-    cost: "★★☆☆☆",
-    highlights: ["知識が増える", "想像力向上", "リラックス効果"],
-  },
-  creative: {
-    name: "イラスト・絵画",
-    emoji: "🎨",
-    description: "自分の想像を形にする創造的な趣味",
-    difficulty: "★★★☆☆",
-    cost: "★★☆☆☆",
-    highlights: ["創造性向上", "達成感", "作品が残る"],
-  },
-  learning: {
-    name: "プログラミング",
-    emoji: "💻",
-    description: "論理的思考力を鍛えながら、実用的なスキルを習得",
-    difficulty: "★★★☆☆",
-    cost: "★☆☆☆☆",
-    highlights: ["スキルアップ", "問題解決力", "副業にも"],
-  },
-  social: {
-    name: "ボードゲーム",
-    emoji: "🎲",
-    description: "友人と楽しめる、コミュニケーションツールとしても最適",
-    difficulty: "★★☆☆☆",
-    cost: "★★☆☆☆",
-    highlights: ["交流が増える", "戦略性", "多様なジャンル"],
-  },
-  nature: {
-    name: "植物栽培・ガーデニング",
-    emoji: "🌱",
-    description: "生命の成長を見守る、癒しの趣味",
-    difficulty: "★★☆☆☆",
-    cost: "★★☆☆☆",
-    highlights: ["癒し効果", "達成感", "実用的"],
-  },
-  food: {
-    name: "料理・お菓子作り",
-    emoji: "🍳",
-    description: "実用的で創造的、美味しい成果が得られる趣味",
-    difficulty: "★★☆☆☆",
-    cost: "★★☆☆☆",
-    highlights: ["実用的", "創造性", "共有できる"],
-  },
-};
+import { hobbyDatabase } from "@/data/hobbies";
+import { getDiagnosisResult } from "@/lib/diagnosticLogic";
 
 function ResultContent() {
   const searchParams = useSearchParams();
   const answersParam = searchParams.get("answers");
+  const modeParam = searchParams.get("mode");
   const answers = answersParam ? answersParam.split(",") : [];
+  const mode = modeParam || "10";
 
-  // 簡易的な診断ロジック：最も多く出現した回答タイプを採用
-  const answerCounts: { [key: string]: number } = {};
-  answers.forEach((answer) => {
-    answerCounts[answer] = (answerCounts[answer] || 0) + 1;
-  });
+  // 新しい診断ロジックを使用
+  const matchResults = getDiagnosisResult(answers, hobbyDatabase);
 
-  const primaryType =
-    Object.keys(answerCounts).sort(
-      (a, b) => answerCounts[b] - answerCounts[a]
-    )[0] || "indoor";
-
-  const recommendedHobby =
-    hobbyDatabase[primaryType as keyof typeof hobbyDatabase] ||
-    hobbyDatabase.indoor;
-
-  // おすすめの趣味を3つピックアップ
-  const allHobbies = Object.values(hobbyDatabase);
-  const otherHobbies = allHobbies
-    .filter((h) => h.name !== recommendedHobby.name)
-    .slice(0, 2);
+  const recommendedHobby = matchResults[0]?.hobby || hobbyDatabase[0];
+  const recommendedScore = matchResults[0]?.score || 0;
+  const otherHobbies = matchResults.slice(1, 3).map((match) => match.hobby);
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-4 py-12">
@@ -102,6 +32,11 @@ function ResultContent() {
         {/* メインの推奨趣味 */}
         <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6">
           <div className="text-center space-y-4">
+            <div className="inline-block px-4 py-2 bg-gradient-to-r from-green-100 to-emerald-100 rounded-full border border-green-300 mb-2">
+              <p className="text-sm font-semibold text-green-700">
+                相性度: {recommendedScore}%
+              </p>
+            </div>
             <div className="text-7xl">{recommendedHobby.emoji}</div>
             <h2 className="text-3xl font-bold text-gray-800">
               {recommendedHobby.name}

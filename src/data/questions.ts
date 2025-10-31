@@ -187,7 +187,7 @@ export const allQuestions: Question[] = [
       { text: "達成感や充実感", value: "accomplishment" },
       { text: "癒しやリラックス", value: "healing" },
       { text: "刺激や興奮", value: "excitement" },
-      { text: "平和や安らぎ", value: "peace" },
+      { text: "仲間とのつながり", value: "peace" },
     ],
   },
   {
