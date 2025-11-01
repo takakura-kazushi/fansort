@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { allQuestions } from "@/data/questions";
 
 // Fisher-Yatesアルゴリズムで配列をシャッフル
@@ -148,12 +149,12 @@ export default function Diagnosis() {
           </div>
 
           <div className="text-center">
-            <a
+            <Link
               href="/"
               className="text-gray-600 hover:text-gray-800 underline text-sm"
             >
               ← トップページに戻る
-            </a>
+            </Link>
           </div>
         </div>
       </main>

@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 export default function Home() {
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
@@ -7,7 +5,7 @@ export default function Home() {
         <div className="space-y-4">
           <h1 className="text-5xl font-bold text-gray-800 mb-2">Funsort</h1>
           <p className="text-xl text-gray-600">
-            「無趣味」から「最初の"楽しい"」まで
+            「無趣味」から「最初の&quot;楽しい&quot;」まで
           </p>
         </div>
 

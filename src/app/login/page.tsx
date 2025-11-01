@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 
 export default function Login() {
@@ -20,7 +21,7 @@ export default function Login() {
     try {
       await signInWithGoogle();
       router.push("/");
-    } catch (error: any) {
+    } catch (error: unknown) {
       setError("Googleログインに失敗しました。もう一度お試しください。");
       console.error(error);
     } finally {
@@ -40,16 +41,17 @@ export default function Login() {
         await signInWithEmail(email, password);
       }
       router.push("/");
-    } catch (error: any) {
-      if (error.code === "auth/email-already-in-use") {
+    } catch (error: unknown) {
+      const firebaseError = error as { code?: string };
+      if (firebaseError.code === "auth/email-already-in-use") {
         setError("このメールアドレスは既に使用されています。");
-      } else if (error.code === "auth/weak-password") {
+      } else if (firebaseError.code === "auth/weak-password") {
         setError("パスワードは6文字以上で設定してください。");
-      } else if (error.code === "auth/invalid-email") {
+      } else if (firebaseError.code === "auth/invalid-email") {
         setError("メールアドレスの形式が正しくありません。");
       } else if (
-        error.code === "auth/user-not-found" ||
-        error.code === "auth/wrong-password"
+        firebaseError.code === "auth/user-not-found" ||
+        firebaseError.code === "auth/wrong-password"
       ) {
         setError("メールアドレスまたはパスワードが正しくありません。");
       } else {
@@ -203,12 +205,12 @@ export default function Login() {
 
         {/* トップに戻る */}
         <div className="text-center">
-          <a
+          <Link
             href="/"
             className="text-sm text-gray-600 hover:text-gray-800 underline"
           >
             トップページに戻る
-          </a>
+          </Link>
         </div>
       </div>
     </main>

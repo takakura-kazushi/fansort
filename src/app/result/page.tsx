@@ -20,7 +20,6 @@ function ResultContent() {
   const { user } = useAuth();
   const answersParam = searchParams.get("answers");
   const answers = answersParam ? answersParam.split(",") : [];
-  const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [settingHobby, setSettingHobby] = useState(false);
   const [currentMyHobby, setCurrentMyHobby] = useState<string | null>(null);
@@ -57,7 +56,6 @@ function ResultContent() {
     let cancelled = false;
 
     const run = async () => {
-      setIsSaving(true);
       try {
         await saveDiagnosisResult(user.uid, {
           hobbyName: recommendedHobby.name,
@@ -87,8 +85,6 @@ function ResultContent() {
             if (!cancelled) setSaveMessage("");
           }, 3000);
         }
-      } finally {
-        if (!cancelled) setIsSaving(false);
       }
     };
 
