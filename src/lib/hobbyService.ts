@@ -9,7 +9,6 @@ import {
   orderBy, 
   Timestamp,
   setDoc,
-  deleteDoc,
   writeBatch
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -202,7 +201,7 @@ export async function updateQuestStatus(
   try {
     const questRef = doc(db, 'users', userId, 'quests', questId);
     
-    const updateData: any = { status };
+    const updateData: Record<string, unknown> = { status };
     if (status === 'complete') {
       updateData.completedAt = Timestamp.now();
     } else {

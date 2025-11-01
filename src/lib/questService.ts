@@ -2,7 +2,6 @@ import {
   collection, 
   doc, 
   addDoc, 
-  getDoc, 
   getDocs, 
   updateDoc, 
   query, 
@@ -149,7 +148,7 @@ export async function updateQuestStatus(
   try {
     const questRef = doc(db, 'users', userId, 'quests', questId);
     
-    const updateData: any = { status };
+    const updateData: Record<string, unknown> = { status };
     if (status === 'complete') {
       updateData.completedAt = Timestamp.now();
     } else {

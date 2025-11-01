@@ -3,6 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import Link from "next/link";
 
 export default function Header() {
   const { user, signOut } = useAuth();
@@ -28,11 +29,11 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* ロゴ */}
-          <a href="/" className="flex items-center space-x-2">
+          <Link href="/" className="flex items-center space-x-2">
             <span className="text-2xl font-bold bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
               Funsort
             </span>
-          </a>
+          </Link>
 
           {/* ナビゲーション */}
           <nav className="flex items-center space-x-4">
