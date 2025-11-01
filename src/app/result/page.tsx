@@ -1,32 +1,133 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { hobbyDatabase } from "@/data/hobbies";
 import { getDiagnosisResult } from "@/lib/diagnosticLogic";
+import { useAuth } from "@/context/AuthContext";
+import { saveDiagnosisResult } from "@/lib/diagnosisService";
 
 function ResultContent() {
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const answersParam = searchParams.get("answers");
-  const modeParam = searchParams.get("mode");
   const answers = answersParam ? answersParam.split(",") : [];
-  const mode = modeParam || "10";
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const hasSaved = useRef(false); // 保存済みフラグ
 
-  // 新しい診断ロジックを使用
+  // 診断ロジックを使用
   const matchResults = getDiagnosisResult(answers, hobbyDatabase);
-
   const recommendedHobby = matchResults[0]?.hobby || hobbyDatabase[0];
   const recommendedScore = matchResults[0]?.score || 0;
   const otherHobbies = matchResults.slice(1, 3).map((match) => match.hobby);
 
+  // ログインユーザーの場合、自動保存（1回のみ）
+  useEffect(() => {
+    // 既に保存済みの場合はスキップ
+    if (hasSaved.current) {
+      return;
+    }
+
+    // 保存条件チェック
+    if (!user || answers.length === 0) {
+      return;
+    }
+
+    // このセッションで既に保存済みかチェック
+    const sessionKey = `diagnosis_saved_${answersParam}`;
+    if (typeof window !== "undefined" && sessionStorage.getItem(sessionKey)) {
+      console.log("Already saved in this session");
+      return;
+    }
+
+    const saveResult = async () => {
+      if (hasSaved.current || isSaving) {
+        return;
+      }
+
+      hasSaved.current = true; // 保存開始をマーク
+      setIsSaving(true);
+
+      try {
+        await saveDiagnosisResult(user.uid, {
+          hobbyName: recommendedHobby.name,
+          hobbyEmoji: recommendedHobby.emoji,
+          score: recommendedScore,
+          answers: answers,
+          resultData: {
+            difficulty: recommendedHobby.difficulty,
+            cost: recommendedHobby.cost,
+            highlights: recommendedHobby.highlights,
+            description: recommendedHobby.description,
+          },
+        });
+
+        // セッションストレージに保存済みマークを設定
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem(sessionKey, "true");
+        }
+
+        setSaveMessage("診断結果を保存しました");
+        setTimeout(() => {
+          setSaveMessage("");
+        }, 3000);
+      } catch (error) {
+        console.error("Failed to save diagnosis:", error);
+        hasSaved.current = false; // エラー時は再試行可能にする
+        setSaveMessage("保存に失敗しました");
+        setTimeout(() => {
+          setSaveMessage("");
+        }, 3000);
+      } finally {
+        setIsSaving(false);
+      }
+    };
+
+    saveResult();
+  }, [user?.uid]); // userのuidのみを依存に含める
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-4 py-12">
       <div className="max-w-4xl mx-auto space-y-8">
+        {/* 保存メッセージ */}
+        {saveMessage && (
+          <div className="fixed top-20 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-fade-in-down z-50">
+            <div className="flex items-center space-x-2">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              <span>{saveMessage}</span>
+            </div>
+          </div>
+        )}
+
         <div className="text-center space-y-4">
           <h1 className="text-3xl font-bold text-gray-800">診断結果</h1>
           <p className="text-gray-600">
             あなたにぴったりの趣味が見つかりました！
           </p>
+          {!user && (
+            <div className="inline-block bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2">
+              <p className="text-sm text-yellow-800">
+                💡{" "}
+                <a href="/login" className="underline font-semibold">
+                  ログイン
+                </a>
+                すると診断結果を保存できます
+              </p>
+            </div>
+          )}
         </div>
 
         {/* メインの推奨趣味 */}
@@ -77,7 +178,7 @@ function ResultContent() {
             href={`/chat?hobby=${encodeURIComponent(recommendedHobby.name)}`}
             className="block w-full py-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 text-center"
           >
-            この趣味をAIと深掘りする
+            この趣味をAIと深掘りする 🤖
           </a>
         </div>
 
