@@ -99,16 +99,16 @@ function ResultContent() {
     };
   }, [user?.uid, answersParam]);
 
-  // マイ趣味に設定
-  const handleSetMyHobby = async () => {
+  // マイ趣味に設定（汎用化：任意の趣味を設定可能）
+  const handleSetMyHobby = async (hobby: typeof recommendedHobby) => {
     if (!user) {
       router.push("/login");
       return;
     }
 
-    if (currentMyHobby && currentMyHobby !== recommendedHobby.name) {
+    if (currentMyHobby && currentMyHobby !== hobby.name) {
       const ok = confirm(
-        `現在のマイ趣味「${currentMyHobby}」を「${recommendedHobby.name}」に変更しますか？\n\n注意: 現在のクエストは削除され、新しい趣味のプリセットクエストに置き換わります。`
+        `現在のマイ趣味「${currentMyHobby}」を「${hobby.name}」に変更しますか？\n\n注意: 現在のクエストは削除され、新しい趣味のプリセットクエストに置き換わります。`
       );
       if (!ok) return;
     }
@@ -116,25 +116,20 @@ function ResultContent() {
     setSettingHobby(true);
     try {
       // マイ趣味を保存（必須）
-      await setMyHobby(
-        user.uid,
-        recommendedHobby.id,
-        recommendedHobby.name,
-        recommendedHobby.emoji
-      );
-      setCurrentMyHobby(recommendedHobby.name);
+      await setMyHobby(user.uid, hobby.id, hobby.name, hobby.emoji);
+      setCurrentMyHobby(hobby.name);
 
       // 既存クエストを削除し、新しいプリセットを登録
       await clearUserQuests(user.uid);
-      const presets = getQuestPresetsByHobbyId(recommendedHobby.id);
+      const presets = getQuestPresetsByHobbyId(hobby.id);
       if (presets.length > 0) {
-        await addPresetQuestsToUser(user.uid, recommendedHobby.id, presets);
+        await addPresetQuestsToUser(user.uid, hobby.id, presets);
       }
 
       setSaveMessage("マイ趣味に設定しました！");
       setTimeout(() => {
         setSaveMessage("");
-        router.push(`/chat?hobby=${encodeURIComponent(recommendedHobby.name)}`);
+        router.push(`/chat?hobby=${encodeURIComponent(hobby.name)}`);
       }, 1200);
     } catch (e) {
       console.error("Failed to set my hobby", e);
@@ -241,7 +236,7 @@ function ResultContent() {
 
           {user ? (
             <button
-              onClick={handleSetMyHobby}
+              onClick={() => handleSetMyHobby(recommendedHobby)}
               disabled={
                 settingHobby || currentMyHobby === recommendedHobby.name
               }
@@ -292,12 +287,31 @@ function ResultContent() {
                     <p className="text-sm text-gray-600">{hobby.description}</p>
                   </div>
                 </div>
-                <a
-                  href={`/chat?hobby=${encodeURIComponent(hobby.name)}`}
-                  className="block w-full py-2 text-center bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
-                >
-                  詳しく見る
-                </a>
+
+                {user ? (
+                  <button
+                    onClick={() => handleSetMyHobby(hobby)}
+                    disabled={settingHobby || currentMyHobby === hobby.name}
+                    className={`block w-full py-3 font-medium rounded-lg transition-all duration-200 ${
+                      currentMyHobby === hobby.name
+                        ? "bg-green-100 text-green-700 cursor-default"
+                        : "bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:opacity-90"
+                    } ${settingHobby ? "opacity-60 cursor-not-allowed" : ""}`}
+                  >
+                    {settingHobby
+                      ? "設定中..."
+                      : currentMyHobby === hobby.name
+                      ? "✓ マイ趣味に設定済み"
+                      : "マイ趣味に設定してAIと話す"}
+                  </button>
+                ) : (
+                  <a
+                    href="/login"
+                    className="block w-full py-3 text-center bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
+                  >
+                    ログインして始める
+                  </a>
+                )}
               </div>
             ))}
           </div>
