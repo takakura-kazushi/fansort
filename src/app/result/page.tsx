@@ -1,107 +1,196 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-
-const hobbyDatabase = {
-  active: {
-    name: "ランニング・ジョギング",
-    emoji: "🏃",
-    description:
-      "身体を動かしてリフレッシュ。自分のペースで始められる手軽なスポーツ",
-    difficulty: "★☆☆☆☆",
-    cost: "★☆☆☆☆",
-    highlights: ["健康増進", "達成感", "一人でも楽しめる"],
-  },
-  indoor: {
-    name: "読書",
-    emoji: "📚",
-    description: "様々な世界を体験できる、知的好奇心を満たす趣味",
-    difficulty: "★☆☆☆☆",
-    cost: "★★☆☆☆",
-    highlights: ["知識が増える", "想像力向上", "リラックス効果"],
-  },
-  creative: {
-    name: "イラスト・絵画",
-    emoji: "🎨",
-    description: "自分の想像を形にする創造的な趣味",
-    difficulty: "★★★☆☆",
-    cost: "★★☆☆☆",
-    highlights: ["創造性向上", "達成感", "作品が残る"],
-  },
-  learning: {
-    name: "プログラミング",
-    emoji: "💻",
-    description: "論理的思考力を鍛えながら、実用的なスキルを習得",
-    difficulty: "★★★☆☆",
-    cost: "★☆☆☆☆",
-    highlights: ["スキルアップ", "問題解決力", "副業にも"],
-  },
-  social: {
-    name: "ボードゲーム",
-    emoji: "🎲",
-    description: "友人と楽しめる、コミュニケーションツールとしても最適",
-    difficulty: "★★☆☆☆",
-    cost: "★★☆☆☆",
-    highlights: ["交流が増える", "戦略性", "多様なジャンル"],
-  },
-  nature: {
-    name: "植物栽培・ガーデニング",
-    emoji: "🌱",
-    description: "生命の成長を見守る、癒しの趣味",
-    difficulty: "★★☆☆☆",
-    cost: "★★☆☆☆",
-    highlights: ["癒し効果", "達成感", "実用的"],
-  },
-  food: {
-    name: "料理・お菓子作り",
-    emoji: "🍳",
-    description: "実用的で創造的、美味しい成果が得られる趣味",
-    difficulty: "★★☆☆☆",
-    cost: "★★☆☆☆",
-    highlights: ["実用的", "創造性", "共有できる"],
-  },
-};
+import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, useRef } from "react";
+import { hobbyDatabase } from "@/data/hobbies";
+import { getDiagnosisResult } from "@/lib/diagnosticLogic";
+import { useAuth } from "@/context/AuthContext";
+import { saveDiagnosisResult } from "@/lib/diagnosisService";
+import {
+  setMyHobby,
+  getMyHobby,
+  addPresetQuestsToUser,
+  clearUserQuests,
+} from "@/lib/hobbyService";
+import { getQuestPresetsByHobbyId } from "@/data/questPresets";
 
 function ResultContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const { user } = useAuth();
   const answersParam = searchParams.get("answers");
   const answers = answersParam ? answersParam.split(",") : [];
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [settingHobby, setSettingHobby] = useState(false);
+  const [currentMyHobby, setCurrentMyHobby] = useState<string | null>(null);
+  const savedAnswersRef = useRef<string | null>(null);
 
-  // 簡易的な診断ロジック：最も多く出現した回答タイプを採用
-  const answerCounts: { [key: string]: number } = {};
-  answers.forEach((answer) => {
-    answerCounts[answer] = (answerCounts[answer] || 0) + 1;
-  });
+  // 診断ロジックを使用
+  const matchResults = getDiagnosisResult(answers, hobbyDatabase);
+  const recommendedHobby = matchResults[0]?.hobby || hobbyDatabase[0];
+  const recommendedScore = matchResults[0]?.score || 0;
+  const otherHobbies = matchResults.slice(1, 3).map((match) => match.hobby);
 
-  const primaryType =
-    Object.keys(answerCounts).sort(
-      (a, b) => answerCounts[b] - answerCounts[a]
-    )[0] || "indoor";
+  // ユーザーの現在のマイ趣味を取得
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const my = await getMyHobby(user.uid);
+        if (my) setCurrentMyHobby(my.hobbyName);
+      } catch (e) {
+        console.error("Failed to fetch my hobby", e);
+      }
+    })();
+  }, [user?.uid]);
 
-  const recommendedHobby =
-    hobbyDatabase[primaryType as keyof typeof hobbyDatabase] ||
-    hobbyDatabase.indoor;
+  // ログインユーザーの場合、自動保存（同じ診断は1回のみ保存）
+  useEffect(() => {
+    if (!user || answers.length === 0) return;
 
-  // おすすめの趣味を3つピックアップ
-  const allHobbies = Object.values(hobbyDatabase);
-  const otherHobbies = allHobbies
-    .filter((h) => h.name !== recommendedHobby.name)
-    .slice(0, 2);
+    // 既に同じ診断を保存済みならスキップ
+    if (savedAnswersRef.current === answersParam) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const run = async () => {
+      setIsSaving(true);
+      try {
+        await saveDiagnosisResult(user.uid, {
+          hobbyName: recommendedHobby.name,
+          hobbyEmoji: recommendedHobby.emoji,
+          score: recommendedScore,
+          answers: answers,
+          resultData: {
+            difficulty: recommendedHobby.difficulty,
+            cost: recommendedHobby.cost,
+            highlights: recommendedHobby.highlights,
+            description: recommendedHobby.description,
+          },
+        });
+        if (!cancelled) {
+          // 保存成功したらrefに記録
+          savedAnswersRef.current = answersParam;
+          setSaveMessage("診断結果を保存しました");
+          setTimeout(() => {
+            if (!cancelled) setSaveMessage("");
+          }, 3000);
+        }
+      } catch (error) {
+        console.error("Failed to save diagnosis:", error);
+        if (!cancelled) {
+          setSaveMessage("保存に失敗しました");
+          setTimeout(() => {
+            if (!cancelled) setSaveMessage("");
+          }, 3000);
+        }
+      } finally {
+        if (!cancelled) setIsSaving(false);
+      }
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid, answersParam]);
+
+  // マイ趣味に設定（汎用化：任意の趣味を設定可能）
+  const handleSetMyHobby = async (hobby: typeof recommendedHobby) => {
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    if (currentMyHobby && currentMyHobby !== hobby.name) {
+      const ok = confirm(
+        `現在のマイ趣味「${currentMyHobby}」を「${hobby.name}」に変更しますか？\n\n注意: 現在のクエストは削除され、新しい趣味のプリセットクエストに置き換わります。`
+      );
+      if (!ok) return;
+    }
+
+    setSettingHobby(true);
+    try {
+      // マイ趣味を保存（必須）
+      await setMyHobby(user.uid, hobby.id, hobby.name, hobby.emoji);
+      setCurrentMyHobby(hobby.name);
+
+      // 既存クエストを削除し、新しいプリセットを登録
+      await clearUserQuests(user.uid);
+      const presets = getQuestPresetsByHobbyId(hobby.id);
+      if (presets.length > 0) {
+        await addPresetQuestsToUser(user.uid, hobby.id, presets);
+      }
+
+      setSaveMessage("マイ趣味に設定しました！");
+      setTimeout(() => {
+        setSaveMessage("");
+        router.push(`/chat?hobby=${encodeURIComponent(hobby.name)}`);
+      }, 1200);
+    } catch (e) {
+      console.error("Failed to set my hobby", e);
+      setSaveMessage("設定に失敗しました");
+      setTimeout(() => setSaveMessage(""), 2500);
+    } finally {
+      setSettingHobby(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-4 py-12">
       <div className="max-w-4xl mx-auto space-y-8">
+        {/* 保存メッセージ */}
+        {saveMessage && (
+          <div className="fixed top-20 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg animate-fade-in-down z-50">
+            <div className="flex items-center space-x-2">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              <span>{saveMessage}</span>
+            </div>
+          </div>
+        )}
+
         <div className="text-center space-y-4">
           <h1 className="text-3xl font-bold text-gray-800">診断結果</h1>
           <p className="text-gray-600">
             あなたにぴったりの趣味が見つかりました！
           </p>
+          {!user && (
+            <div className="inline-block bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2">
+              <p className="text-sm text-yellow-800">
+                💡{" "}
+                <a href="/login" className="underline font-semibold">
+                  ログイン
+                </a>
+                すると診断結果を保存できます
+              </p>
+            </div>
+          )}
         </div>
 
         {/* メインの推奨趣味 */}
         <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6">
           <div className="text-center space-y-4">
+            <div className="inline-block px-4 py-2 bg-gradient-to-r from-green-100 to-emerald-100 rounded-full border border-green-300 mb-2">
+              <p className="text-sm font-semibold text-green-700">
+                相性度: {recommendedScore}%
+              </p>
+            </div>
             <div className="text-7xl">{recommendedHobby.emoji}</div>
             <h2 className="text-3xl font-bold text-gray-800">
               {recommendedHobby.name}
@@ -144,6 +233,38 @@ function ResultContent() {
           >
             この趣味をAIと深掘りする
           </a>
+
+          {user ? (
+            <button
+              onClick={() => handleSetMyHobby(recommendedHobby)}
+              disabled={
+                settingHobby || currentMyHobby === recommendedHobby.name
+              }
+              className={`block w-full py-4 font-semibold rounded-full shadow-lg transition-all duration-200 mt-3 ${
+                currentMyHobby === recommendedHobby.name
+                  ? "bg-green-100 text-green-700 cursor-default"
+                  : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:shadow-xl hover:scale-105"
+              } ${settingHobby ? "opacity-60 cursor-not-allowed" : ""}`}
+            >
+              {settingHobby
+                ? "設定中..."
+                : currentMyHobby === recommendedHobby.name
+                ? "✓ マイ趣味に設定済み"
+                : "マイ趣味に設定してクエストを始める"}
+            </button>
+          ) : (
+            <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 text-center mt-3">
+              <p className="text-sm text-blue-800 mb-2">
+                マイ趣味に設定してクエスト機能を利用しよう！
+              </p>
+              <a
+                href="/login"
+                className="text-blue-600 font-semibold underline hover:text-blue-700"
+              >
+                ログインして始める →
+              </a>
+            </div>
+          )}
         </div>
 
         {/* その他のおすすめ */}
@@ -166,12 +287,31 @@ function ResultContent() {
                     <p className="text-sm text-gray-600">{hobby.description}</p>
                   </div>
                 </div>
-                <a
-                  href={`/chat?hobby=${encodeURIComponent(hobby.name)}`}
-                  className="block w-full py-2 text-center bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
-                >
-                  詳しく見る
-                </a>
+
+                {user ? (
+                  <button
+                    onClick={() => handleSetMyHobby(hobby)}
+                    disabled={settingHobby || currentMyHobby === hobby.name}
+                    className={`block w-full py-3 font-medium rounded-lg transition-all duration-200 ${
+                      currentMyHobby === hobby.name
+                        ? "bg-green-100 text-green-700 cursor-default"
+                        : "bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:opacity-90"
+                    } ${settingHobby ? "opacity-60 cursor-not-allowed" : ""}`}
+                  >
+                    {settingHobby
+                      ? "設定中..."
+                      : currentMyHobby === hobby.name
+                      ? "✓ マイ趣味に設定済み"
+                      : "マイ趣味に設定してAIと話す"}
+                  </button>
+                ) : (
+                  <a
+                    href="/login"
+                    className="block w-full py-3 text-center bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
+                  >
+                    ログインして始める
+                  </a>
+                )}
               </div>
             ))}
           </div>
