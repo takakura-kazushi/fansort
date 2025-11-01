@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { hobbyDatabase } from "@/data/hobbies";
 import { getDiagnosisResult } from "@/lib/diagnosticLogic";
 import { useAuth } from "@/context/AuthContext";
@@ -24,6 +24,7 @@ function ResultContent() {
   const [saveMessage, setSaveMessage] = useState("");
   const [settingHobby, setSettingHobby] = useState(false);
   const [currentMyHobby, setCurrentMyHobby] = useState<string | null>(null);
+  const savedAnswersRef = useRef<string | null>(null);
 
   // 診断ロジックを使用
   const matchResults = getDiagnosisResult(answers, hobbyDatabase);
@@ -44,16 +45,18 @@ function ResultContent() {
     })();
   }, [user?.uid]);
 
-  // ログインユーザーの場合、自動保存（1回のみ）
+  // ログインユーザーの場合、自動保存（同じ診断は1回のみ保存）
   useEffect(() => {
-    let isMounted = true;
+    if (!user || answers.length === 0) return;
 
-    const saveResult = async () => {
-      // 既に保存処理中、または保存済みの場合はスキップ
-      if (!user || answers.length === 0 || isSaving || saveMessage) {
-        return;
-      }
+    // 既に同じ診断を保存済みならスキップ
+    if (savedAnswersRef.current === answersParam) {
+      return;
+    }
 
+    let cancelled = false;
+
+    const run = async () => {
       setIsSaving(true);
       try {
         await saveDiagnosisResult(user.uid, {
@@ -68,38 +71,33 @@ function ResultContent() {
             description: recommendedHobby.description,
           },
         });
-
-        if (isMounted) {
+        if (!cancelled) {
+          // 保存成功したらrefに記録
+          savedAnswersRef.current = answersParam;
           setSaveMessage("診断結果を保存しました");
           setTimeout(() => {
-            if (isMounted) {
-              setSaveMessage("");
-            }
+            if (!cancelled) setSaveMessage("");
           }, 3000);
         }
       } catch (error) {
         console.error("Failed to save diagnosis:", error);
-        if (isMounted) {
+        if (!cancelled) {
           setSaveMessage("保存に失敗しました");
           setTimeout(() => {
-            if (isMounted) {
-              setSaveMessage("");
-            }
+            if (!cancelled) setSaveMessage("");
           }, 3000);
         }
       } finally {
-        if (isMounted) {
-          setIsSaving(false);
-        }
+        if (!cancelled) setIsSaving(false);
       }
     };
 
-    saveResult();
+    run();
 
     return () => {
-      isMounted = false;
+      cancelled = true;
     };
-  }, []); // 依存配列を空にして初回のみ実行
+  }, [user?.uid, answersParam]);
 
   // マイ趣味に設定
   const handleSetMyHobby = async () => {
